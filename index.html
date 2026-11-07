@@ -11,6 +11,8 @@
 <link rel="apple-touch-icon" href="icon.png">
 <link rel="icon" href="icon.png">
 <title>答疑老师</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <style>
 :root{
   --blue:#2F6BFF; --blue-d:#2558D8; --bg:#F4F6F9; --card:#fff;
@@ -129,6 +131,11 @@ footer{
 .item img{max-width:100%; border-radius:9px; margin-top:7px; display:block;}
 .empty{color:var(--muted); font-size:13px; text-align:center; padding:34px 0;}
 .tip{font-size:11px; color:var(--muted); line-height:1.5; margin-top:10px;}
+.bubble pre.code{background:#F1F3F7; border-radius:8px; padding:8px 10px; overflow:auto; font-size:13px; white-space:pre;}
+.bubble code{background:#F1F3F7; border-radius:4px; padding:1px 4px; font-size:13px;}
+.bubble ul{margin:4px 0; padding-left:20px;}
+.bubble h4{margin:10px 0 4px; font-size:15px;}
+.bubble .katex-display{margin:8px 0; overflow-x:auto;}
 </style>
 </head>
 <body>
@@ -334,7 +341,7 @@ async function send(){
       scrollBottom();
     });
     S.messages.push({role:"assistant", content: acc.text});
-    bot.span.textContent = acc.text || "（没有返回内容）";
+    renderRich(bot.span, acc.text || "（没有返回内容）");
     addRecordButton(bot.wrap, pairIndex + 1); // assistant 的位置
     saveHistory(shown, acc.text);
   } catch (e) {
@@ -479,7 +486,7 @@ async function importDocument(file){
     scrollBottom();
   }).then(() => {
     S.messages.push({role:"assistant", content: acc.text});
-    bot.span.textContent = acc.text || "（没有返回内容）";
+    renderRich(bot.span, acc.text || "（没有返回内容）");
     addRecordButton(bot.wrap, pairIndex + 1);
     saveHistory("[文档] " + name, acc.text);
   }).catch((e) => {
@@ -617,7 +624,7 @@ function analyzeLearning(){
     bot.span.textContent = acc.text;
     scrollBottom();
   }).then(() => {
-    bot.span.textContent = acc.text || "（没有返回内容）";
+    renderRich(bot.span, acc.text || "（没有返回内容）");
     if (acc.text) {
       try { localStorage.setItem("dt_portrait", acc.text); } catch(e) {}
       S.messages.length = baseIndex;   // 分析这一轮不留在对话上下文里
@@ -674,6 +681,39 @@ function escapeHtml(s){
   return String(s == null ? "" : s)
     .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
     .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+}
+
+/* 把 Markdown + LaTeX 渲染成可读内容（公式用 KaTeX） */
+function renderRich(el, text){
+  let s = escapeHtml(text);
+  const formulas = [];
+  s = s.replace(/\$\$([\s\S]+?)\$\$/g, (m, f) => {
+    formulas.push({tex: f, display: true});
+    return "\u0001F" + (formulas.length - 1) + "\u0001";
+  });
+  s = s.replace(/\$([^\$\n]+?)\$/g, (m, f) => {
+    formulas.push({tex: f, display: false});
+    return "\u0001F" + (formulas.length - 1) + "\u0001";
+  });
+  s = s.replace(/```([\s\S]*?)```/g, (m, c) => "<pre class=\"code\">" + c + "</pre>");
+  s = s.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+  s = s.replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>");
+  s = s.replace(/^#{1,3}\s+(.+)$/gm, "<h4>$1</h4>");
+  s = s.replace(/^\s*[-*]\s+(.+)$/gm, "<li>$1</li>");
+  s = s.replace(/(<li>[\s\S]*?<\/li>)/g, "<ul>$1</ul>");
+  s = s.replace(/\n/g, "<br>");
+  s = s.replace(/\u0001F(\d+)\u0001/g, (m, i) => {
+    const f = formulas[+i];
+    if (window.katex) {
+      try {
+        return katex.renderToString(f.tex, {displayMode: f.display, throwOnError: false});
+      } catch(e) {}
+    }
+    return f.display ? "\\[" + f.tex + "\\]" : f.tex;
+  });
+  s = s.replace(/<br\s*\/?><ul>/g, "<ul>").replace(/<\/ul><br\s*\/?>/g, "</ul>");
+  el.innerHTML = s;
+  el.style.display = "block";
 }
 
 /* ---------------- 变式练习 ---------------- */
