@@ -33,8 +33,8 @@ header{
 .brand .sub{font-size:11px; color:var(--muted); margin-top:1px;}
 .actions{display:flex; gap:4px; flex:0 0 auto;}
 .actions button{
-  border:0; background:transparent; color:#4A4F57; font-size:12px;
-  padding:7px 7px; border-radius:9px; font-family:inherit;
+  border:0; background:transparent; color:#4A4F57; font-size:11px;
+  padding:7px 5px; border-radius:9px; font-family:inherit;
 }
 .actions button:active{background:var(--soft);}
 #chat{flex:1 1 auto; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:12px 10px 4px;}
@@ -141,6 +141,7 @@ footer{
   <div class="actions">
     <button id="btnBook">错题本</button>
     <button id="btnPractice">变式</button>
+    <button id="btnAnalyze">学情</button>
     <button id="btnNew">新对话</button>
     <button id="btnSet">设置</button>
   </div>
@@ -155,18 +156,25 @@ footer{
 </div>
 
 <footer>
-  <button id="btnImg">图片</button>
+  <button id="btnImg">文件</button>
   <textarea id="input" rows="1" placeholder="输入问题，或拍照发题…"></textarea>
   <button id="btnSend">发送</button>
 </footer>
 
-<input type="file" id="fileInput" accept="image/*" hidden>
+<input type="file" id="fileInput" accept="image/*,.pdf,.docx,.txt,.md" hidden>
 
 <div id="overlay" class="hidden"></div>
 <div id="sheet" class="sheet hidden"></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
 <script>
 "use strict";
+
+if (window.pdfjsLib) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+}
 
 const BASE_PROMPT = `你是一位耐心、专业的高二全科答疑老师，只负责答疑、讲题和学习规划。
 
@@ -272,6 +280,8 @@ function addRecordButton(wrap, pairIndex){
 function systemPrompt(){
   let p = BASE_PROMPT;
   if (S.profile.trim()) p += "\n【学生档案】（回答时按这份档案来）\n" + S.profile.trim() + "\n";
+  const portrait = localStorage.getItem("dt_portrait") || "";
+  if (portrait.trim()) p += "\n【学情画像】（根据我过往提问自动总结，讲解时优先针对这些薄弱点）\n" + portrait.trim() + "\n";
   return p;
 }
 
@@ -326,6 +336,7 @@ async function send(){
     S.messages.push({role:"assistant", content: acc.text});
     bot.span.textContent = acc.text || "（没有返回内容）";
     addRecordButton(bot.wrap, pairIndex + 1); // assistant 的位置
+    saveHistory(shown, acc.text);
   } catch (e) {
     bot.span.textContent = "出错了：" + e.message;
   } finally {
@@ -397,16 +408,86 @@ async function onFile(e){
   const file = e.target.files && e.target.files[0];
   e.target.value = "";
   if (!file) return;
-  try {
-    const b64 = await compressImage(file);
-    S.pending = {b64, name: file.name || "图片"};
-    $("previewImg").src = "data:image/jpeg;base64," + b64;
-    $("previewName").textContent = file.name || "图片";
-    $("previewBar").classList.remove("hidden");
-    scrollBottom();
-  } catch(err) {
-    alert("图片处理失败：" + err.message);
+  const name = (file.name || "").toLowerCase();
+  if (file.type && file.type.startsWith("image/")) {
+    try {
+      const b64 = await compressImage(file);
+      S.pending = {b64, name: file.name || "图片"};
+      $("previewImg").src = "data:image/jpeg;base64," + b64;
+      $("previewName").textContent = file.name || "图片";
+      $("previewBar").classList.remove("hidden");
+      scrollBottom();
+    } catch(err) {
+      alert("图片处理失败：" + err.message);
+    }
+    return;
   }
+  if (/\.(pdf|docx|txt|md)$/.test(name)) {
+    await importDocument(file);
+    return;
+  }
+  alert("不支持的文件类型：" + (file.name || ""));
+}
+
+async function importDocument(file){
+  if (S.busy) return;
+  if (!S.key) { openSettings(); return; }
+  const name = file.name || "文档";
+  const lower = name.toLowerCase();
+  let text = "";
+  try {
+    if (lower.endsWith(".txt") || lower.endsWith(".md")) {
+      text = await file.text();
+    } else if (lower.endsWith(".docx")) {
+      if (!window.mammoth) throw new Error("Word 解析组件未加载，请联网后重试");
+      const buf = await file.arrayBuffer();
+      const res = await mammoth.extractRawText({arrayBuffer: buf});
+      text = res.value || "";
+    } else if (lower.endsWith(".pdf")) {
+      if (!window.pdfjsLib) throw new Error("PDF 解析组件未加载，请联网后重试");
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+      const n = Math.min(pdf.numPages, 15);
+      for (let i = 1; i <= n; i++) {
+        const page = await pdf.getPage(i);
+        const tc = await page.getTextContent();
+        text += tc.items.map((it) => it.str).join(" ") + "\n\n";
+      }
+    }
+  } catch (err) {
+    alert("文档解析失败：" + err.message);
+    return;
+  }
+  text = (text || "").trim();
+  if (!text) {
+    alert("没提取到文字。如果是扫描版 PDF，请改用「文件 → 拍照」逐页发送。");
+    return;
+  }
+  if (text.length > 12000) text = text.slice(0, 12000) + "\n\n（后面内容太长，已省略）";
+
+  const content = "【我上传的文档：" + name + "】\n\n" + text + "\n\n请帮我分析这份文档。";
+  const pairIndex = S.messages.length;
+  S.messages.push({role:"user", content});
+  bubble("user", "[文档] " + name);
+  const bot = bubble("bot", "…");
+  S.busy = true;
+  $("btnSend").disabled = true;
+  const acc = {text: ""};
+  streamChat(buildMessages(), S.model, (d) => {
+    acc.text += d;
+    bot.span.textContent = acc.text;
+    scrollBottom();
+  }).then(() => {
+    S.messages.push({role:"assistant", content: acc.text});
+    bot.span.textContent = acc.text || "（没有返回内容）";
+    addRecordButton(bot.wrap, pairIndex + 1);
+    saveHistory("[文档] " + name, acc.text);
+  }).catch((e) => {
+    bot.span.textContent = "出错了：" + e.message;
+  }).finally(() => {
+    S.busy = false;
+    $("btnSend").disabled = false;
+  });
 }
 
 function clearPending(){
@@ -477,6 +558,77 @@ function saveRecord(pairIndex, subject){
   // 每科最多保留 40 条，避免占满存储
   book[subject] = book[subject].slice(0, 40);
   saveBook(book);
+}
+
+/* ---------------- 学情分析 ---------------- */
+function saveHistory(q, a){
+  if (!a) return;
+  let h = [];
+  try { h = JSON.parse(localStorage.getItem("dt_history") || "[]"); } catch(e) { h = []; }
+  h.push({q: String(q || "").slice(0, 400), a: String(a).slice(0, 700), t: Date.now()});
+  if (h.length > 80) h = h.slice(-80);
+  try { localStorage.setItem("dt_history", JSON.stringify(h)); } catch(e) {}
+}
+
+function historyText(maxChars){
+  let h = [];
+  try { h = JSON.parse(localStorage.getItem("dt_history") || "[]"); } catch(e) { return ""; }
+  let s = h.map((it) => "问：" + it.q + "\n答：" + it.a).join("\n\n---\n\n");
+  if (maxChars && s.length > maxChars) s = s.slice(-maxChars);
+  return s;
+}
+
+function analyzeLearning(){
+  if (S.busy) return;
+  if (!S.key) { openSettings(); return; }
+  const hist = historyText(6000);
+  const book = loadBook();
+  let wrong = "";
+  for (const k in book) {
+    (book[k] || []).slice(0, 4).forEach((it) => {
+      wrong += "【" + k + "】" + it.text + "\n解析：" + it.answer + "\n\n";
+    });
+  }
+  if (!hist && !wrong) { alert("还没有足够的记录，先问几道题再来分析"); return; }
+
+  let src = "";
+  if (S.profile.trim()) src += "【我的基本情况】\n" + S.profile.trim() + "\n\n";
+  if (hist) src += "【最近的问答记录】\n" + hist + "\n\n";
+  if (wrong) src += "【错题本】\n" + wrong;
+  const prompt = "下面是我最近在你的答疑里问过的题、你的回答、我的错题本，以及我的基本情况。" +
+    "请你作为我的老师，分析我的学习情况：\n" +
+    "1. 我最薄弱的知识点和题型（要具体，不要只说“数学弱”）\n" +
+    "2. 我最常犯的错误类型（概念不清 / 方法没想到 / 计算失误 / 审题）\n" +
+    "3. 我的学习习惯有什么特点\n" +
+    "4. 接下来最该补的 3 件事\n\n" +
+    "重要：只根据上面的记录判断。如果某个方面记录太少、看不出规律，" +
+    "直接写“记录不足，暂无法判断”，绝对不要编造或过度推断。\n" +
+    "总字数 500 字以内。\n\n" + src;
+
+  const baseIndex = S.messages.length;
+  S.messages.push({role:"user", content: prompt});
+  bubble("user", "[学情分析] 分析我最近的学习情况");
+  const bot = bubble("bot", "…");
+  S.busy = true;
+  $("btnSend").disabled = true;
+  const acc = {text: ""};
+  streamChat(buildMessages(), S.model, (d) => {
+    acc.text += d;
+    bot.span.textContent = acc.text;
+    scrollBottom();
+  }).then(() => {
+    bot.span.textContent = acc.text || "（没有返回内容）";
+    if (acc.text) {
+      try { localStorage.setItem("dt_portrait", acc.text); } catch(e) {}
+      S.messages.length = baseIndex;   // 分析这一轮不留在对话上下文里
+      alert("学情画像已更新，之后的提问会按它来讲");
+    }
+  }).catch((e) => {
+    bot.span.textContent = "出错了：" + e.message;
+  }).finally(() => {
+    S.busy = false;
+    $("btnSend").disabled = false;
+  });
 }
 
 /* ---------------- 错题本 ---------------- */
@@ -598,6 +750,7 @@ $("btnNew").addEventListener("click", () => {
   welcome();
 });
 $("btnBook").addEventListener("click", openBook);
+$("btnAnalyze").addEventListener("click", analyzeLearning);
 $("btnPractice").addEventListener("click", openPractice);
 $("btnSet").addEventListener("click", openSettings);
 
