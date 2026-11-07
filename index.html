@@ -696,6 +696,14 @@ function renderRich(el, text){
     formulas.push({tex: f, display: false});
     return "\u0001F" + (formulas.length - 1) + "\u0001";
   });
+  s = s.replace(/\\\[([\s\S]+?)\\\]/g, (m, f) => {
+    formulas.push({tex: f, display: true});
+    return "\u0001F" + (formulas.length - 1) + "\u0001";
+  });
+  s = s.replace(/\\\(([\s\S]+?)\\\)/g, (m, f) => {
+    formulas.push({tex: f, display: false});
+    return "\u0001F" + (formulas.length - 1) + "\u0001";
+  });
   s = escapeHtml(s);
   s = s.replace(/```([\s\S]*?)```/g, (m, c) => "<pre class=\"code\">" + c + "</pre>");
   s = s.replace(/`([^`\n]+)`/g, "<code>$1</code>");
