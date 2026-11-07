@@ -725,8 +725,14 @@ function openSettings(){
   html += '</select></div>';
   html += '<div class="field"><label>我的情况（可选，会随每次提问带上）</label><textarea id="fProfile" placeholder="比如：山东，人教版，选科物化生，物理最弱，目标期末进前 100">' + escapeHtml(S.profile) + '</textarea></div>';
   html += '<button class="primary" id="fSave">保存</button>';
-  html += '<div class="tip">Key 只存在这台手机的浏览器里，不会上传到别处。发图片时会自动用 deepseek-flash。</div>';
+  html += '<button class="primary" id="fReload" style="background:#F1F3F7;color:#3A3F47;margin-top:8px">强制刷新到最新版</button>';
+  html += '<div class="tip">更新后如果界面还是旧的，点上面这个按钮。它只重新加载页面，不会清除你的设置、错题本和学情画像。</div>';
   openSheet(html);
+  $("fReload").addEventListener("click", () => {
+    const u = new URL(location.href);
+    u.searchParams.set("t", Date.now().toString());
+    location.replace(u.toString());
+  });
   $("fSave").addEventListener("click", () => {
     S.key = $("fKey").value.trim();
     S.model = $("fModel").value;
