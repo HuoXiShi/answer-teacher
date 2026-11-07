@@ -330,17 +330,29 @@ async function send(){
   clearPending();
 
   const bot = bubble("bot", "");
-  bot.span.textContent = "…";
+  bot.span.textContent = "思考中…";
   S.busy = true;
   $("btnSend").disabled = true;
+
+  const t0 = Date.now();
+  let reasonChars = 0;
+  let gotContent = false;
+  const timer = setInterval(() => {
+    if (!S.busy || gotContent) return;
+    const sec = Math.floor((Date.now() - t0) / 1000);
+    bot.span.textContent = reasonChars
+      ? "正在推演… 已思考 " + reasonChars + " 字（" + sec + "s）"
+      : "思考中… " + sec + "s";
+  }, 400);
 
   const acc = {text: ""};
   try {
     await streamChat(buildMessages(), model, (d) => {
+      gotContent = true;
       acc.text += d;
       bot.span.textContent = acc.text;
       scrollBottom();
-    });
+    }, (r) => { reasonChars += r.length; });
     S.messages.push({role:"assistant", content: acc.text});
     renderRich(bot.span, acc.text || "（没有返回内容）");
     addRecordButton(bot.wrap, pairIndex + 1); // assistant 的位置
@@ -348,13 +360,14 @@ async function send(){
   } catch (e) {
     bot.span.textContent = "出错了：" + e.message;
   } finally {
+    clearInterval(timer);
     S.busy = false;
     $("btnSend").disabled = false;
     scrollBottom();
   }
 }
 
-async function streamChat(messages, model, onDelta){
+async function streamChat(messages, model, onDelta, onReason){
   const res = await fetch("https://api.deepseek.com/chat/completions", {
     method:"POST",
     headers:{
@@ -384,7 +397,10 @@ async function streamChat(messages, model, onDelta){
       if (data === "[DONE]") return;
       try {
         const obj = JSON.parse(data);
-        const d = ((obj.choices || [{}])[0].delta || {}).content || "";
+        const delta = ((obj.choices || [{}])[0].delta) || {};
+        const r = delta.reasoning_content || "";
+        if (r && onReason) onReason(r);
+        const d = delta.content || "";
         if (d) onDelta(d);
       } catch(e) {}
     }
@@ -477,15 +493,26 @@ async function importDocument(file){
   const pairIndex = S.messages.length;
   S.messages.push({role:"user", content});
   bubble("user", "[文档] " + name);
-  const bot = bubble("bot", "…");
+  const bot = bubble("bot", "正在解析文档…");
   S.busy = true;
   $("btnSend").disabled = true;
+  const t0 = Date.now();
+  let reasonChars = 0;
+  let gotContent = false;
+  const timer = setInterval(() => {
+    if (!S.busy || gotContent) return;
+    const sec = Math.floor((Date.now() - t0) / 1000);
+    bot.span.textContent = reasonChars
+      ? "正在推演… 已思考 " + reasonChars + " 字（" + sec + "s）"
+      : "阅读文档中… " + sec + "s";
+  }, 400);
   const acc = {text: ""};
   streamChat(buildMessages(), S.model, (d) => {
+    gotContent = true;
     acc.text += d;
     bot.span.textContent = acc.text;
     scrollBottom();
-  }).then(() => {
+  }, (r) => { reasonChars += r.length; }).then(() => {
     S.messages.push({role:"assistant", content: acc.text});
     renderRich(bot.span, acc.text || "（没有返回内容）");
     addRecordButton(bot.wrap, pairIndex + 1);
@@ -493,6 +520,7 @@ async function importDocument(file){
   }).catch((e) => {
     bot.span.textContent = "出错了：" + e.message;
   }).finally(() => {
+    clearInterval(timer);
     S.busy = false;
     $("btnSend").disabled = false;
   });
@@ -603,28 +631,40 @@ function analyzeLearning(){
   if (S.profile.trim()) src += "【我的基本情况】\n" + S.profile.trim() + "\n\n";
   if (hist) src += "【最近的问答记录】\n" + hist + "\n\n";
   if (wrong) src += "【错题本】\n" + wrong;
-  const prompt = "下面是我最近在你的答疑里问过的题、你的回答、我的错题本，以及我的基本情况。" +
-    "请你作为我的老师，分析我的学习情况：\n" +
-    "1. 我最薄弱的知识点和题型（要具体，不要只说“数学弱”）\n" +
-    "2. 我最常犯的错误类型（概念不清 / 方法没想到 / 计算失误 / 审题）\n" +
-    "3. 我的学习习惯有什么特点\n" +
-    "4. 接下来最该补的 3 件事\n\n" +
-    "重要：只根据上面的记录判断。如果某个方面记录太少、看不出规律，" +
-    "直接写“记录不足，暂无法判断”，绝对不要编造或过度推断。\n" +
-    "总字数 500 字以内。\n\n" + src;
+  const prompt = "下面是我最近在你的答疑里问过的题、你的回答、我的错题本，以及我的基本情况。\n\n" +
+    "请你作为我的老师，做一次严格的学习诊断。必须遵守：\n" +
+    "1. 每条结论后面必须附上支撑它的具体原题证据，格式：结论 —— 证据：「原题片段」。没有证据的结论不要写。\n" +
+    "2. 禁止写通用建议（如“多做练习”“加强基础”“注意审题”“多总结”），这类空话一律不要出现。\n" +
+    "3. 如果记录不足以支撑某个判断，直接写“记录不足，暂无法判断”。\n" +
+    "4. 按三段输出：\n" +
+    "【已确认的薄弱点】最多 3 条，每条带证据\n" +
+    "【还需观察】目前数据不够、但值得注意的地方\n" +
+    "【下一步动作】具体到做哪类题、练哪个步骤，不要写“多练”\n\n" +
+    "总字数 450 字以内。\n\n" + src;
 
   const baseIndex = S.messages.length;
   S.messages.push({role:"user", content: prompt});
   bubble("user", "[学情分析] 分析我最近的学习情况");
-  const bot = bubble("bot", "…");
+  const bot = bubble("bot", "正在分析…");
   S.busy = true;
   $("btnSend").disabled = true;
+  const t0 = Date.now();
+  let reasonChars = 0;
+  let gotContent = false;
+  const timer = setInterval(() => {
+    if (!S.busy || gotContent) return;
+    const sec = Math.floor((Date.now() - t0) / 1000);
+    bot.span.textContent = reasonChars
+      ? "正在推演… 已思考 " + reasonChars + " 字（" + sec + "s）"
+      : "正在分析学习记录… " + sec + "s";
+  }, 400);
   const acc = {text: ""};
   streamChat(buildMessages(), S.model, (d) => {
+    gotContent = true;
     acc.text += d;
     bot.span.textContent = acc.text;
     scrollBottom();
-  }).then(() => {
+  }, (r) => { reasonChars += r.length; }).then(() => {
     renderRich(bot.span, acc.text || "（没有返回内容）");
     if (acc.text) {
       try { localStorage.setItem("dt_portrait", acc.text); } catch(e) {}
@@ -634,6 +674,7 @@ function analyzeLearning(){
   }).catch((e) => {
     bot.span.textContent = "出错了：" + e.message;
   }).finally(() => {
+    clearInterval(timer);
     S.busy = false;
     $("btnSend").disabled = false;
   });
@@ -745,20 +786,32 @@ function openPractice(){
     const pairIndex = S.messages.length;
     S.messages.push({role:"user", content: prompt});
     bubble("user", "[变式练习·" + subj + "] 根据错题本出题");
-    const bot = bubble("bot", "…");
+    const bot = bubble("bot", "正在出题…");
     S.busy = true;
     $("btnSend").disabled = true;
+    const t0 = Date.now();
+    let reasonChars = 0;
+    let gotContent = false;
+    const timer = setInterval(() => {
+      if (!S.busy || gotContent) return;
+      const sec = Math.floor((Date.now() - t0) / 1000);
+      bot.span.textContent = reasonChars
+        ? "正在推演… 已思考 " + reasonChars + " 字（" + sec + "s）"
+        : "正在出题… " + sec + "s";
+    }, 400);
     const acc = {text: ""};
     streamChat(buildMessages(), S.model, (d) => {
+      gotContent = true;
       acc.text += d;
       bot.span.textContent = acc.text;
       scrollBottom();
-    }).then(() => {
+    }, (r) => { reasonChars += r.length; }).then(() => {
       S.messages.push({role:"assistant", content: acc.text});
-      bot.span.textContent = acc.text || "（没有返回内容）";
+      renderRich(bot.span, acc.text || "（没有返回内容）");
     }).catch((e) => {
       bot.span.textContent = "出错了：" + e.message;
     }).finally(() => {
+      clearInterval(timer);
       S.busy = false;
       $("btnSend").disabled = false;
     });
