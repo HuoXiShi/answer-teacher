@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="答疑老师">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#ffffff">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" href="icon.png">
+<title>答疑老师</title>
+<style>
+:root{
+  --blue:#2F6BFF; --blue-d:#2558D8; --bg:#F4F6F9; --card:#fff;
+  --text:#1F2329; --muted:#8A8F99; --border:#E6E8EC; --soft:#F1F3F7;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0; padding:0; height:100%;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+  background:var(--bg); color:var(--text);
+  display:flex; flex-direction:column; height:100dvh; overflow:hidden;
+}
+header{
+  flex:0 0 auto; background:var(--card); border-bottom:1px solid var(--border);
+  padding:calc(env(safe-area-inset-top) + 10px) 12px 10px;
+  display:flex; align-items:center; gap:8px;
+}
+.brand{flex:1; min-width:0;}
+.brand .title{font-size:17px; font-weight:700;}
+.brand .sub{font-size:11px; color:var(--muted); margin-top:1px;}
+.actions{display:flex; gap:4px; flex:0 0 auto;}
+.actions button{
+  border:0; background:transparent; color:#4A4F57; font-size:12px;
+  padding:7px 7px; border-radius:9px; font-family:inherit;
+}
+.actions button:active{background:var(--soft);}
+#chat{flex:1 1 auto; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:12px 10px 4px;}
+.msg{display:flex; gap:8px; margin-bottom:12px; align-items:flex-start;}
+.msg .av{
+  flex:0 0 auto; width:30px; height:30px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:12px; font-weight:700; margin-top:2px;
+}
+.msg.bot .av{background:#E8EEFF; color:var(--blue);}
+.msg.me{flex-direction:row-reverse;}
+.msg.me .av{background:#DCE6FB; color:var(--blue);}
+.bubble{
+  max-width:78%; padding:10px 13px; border-radius:16px;
+  font-size:15px; line-height:1.6; white-space:pre-wrap; word-break:break-word;
+}
+.msg.bot .bubble{background:var(--card); border:1px solid var(--border); border-top-left-radius:5px;}
+.msg.me .bubble{background:var(--blue); color:#fff; border-top-right-radius:5px;}
+.msg .under{margin-top:6px;}
+.msg.bot .under button{
+  border:0; background:transparent; color:var(--muted); font-size:12px;
+  padding:3px 0; font-family:inherit;
+}
+.msg.bot .under button:active{color:var(--blue);}
+.bubble img{max-width:100%; border-radius:10px; display:block; margin-bottom:6px;}
+#previewBar{
+  flex:0 0 auto; background:var(--card); border-top:1px solid var(--border);
+  display:flex; align-items:center; gap:10px; padding:8px 14px;
+}
+#previewBar img{width:52px; height:52px; object-fit:cover; border-radius:10px; border:1px solid var(--border);}
+#previewBar .nm{flex:1; font-size:12px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+#previewBar button{border:0; background:transparent; color:#D14343; font-size:13px; font-family:inherit;}
+footer{
+  flex:0 0 auto; background:var(--card); border-top:1px solid var(--border);
+  padding:8px 10px calc(env(safe-area-inset-bottom) + 8px);
+  display:flex; align-items:flex-end; gap:8px;
+}
+#btnImg{
+  flex:0 0 auto; width:42px; height:42px; border-radius:12px; border:0;
+  background:var(--soft); color:#4A4F57; font-size:12px; font-family:inherit;
+}
+#input{
+  flex:1 1 auto; min-height:42px; max-height:120px; resize:none;
+  border:1px solid var(--border); border-radius:14px; background:var(--soft);
+  padding:10px 12px; font-size:15px; font-family:inherit; color:var(--text);
+  outline:none; line-height:1.4;
+}
+#btnSend{
+  flex:0 0 auto; height:42px; padding:0 16px; border:0; border-radius:14px;
+  background:var(--blue); color:#fff; font-size:15px; font-weight:600; font-family:inherit;
+}
+#btnSend:disabled{opacity:.5;}
+.hidden{display:none !important;}
+#overlay{position:fixed; inset:0; background:rgba(20,24,32,.35); z-index:20;}
+.sheet{
+  position:fixed; left:0; right:0; bottom:0; z-index:21;
+  background:var(--bg); border-radius:20px 20px 0 0;
+  padding:14px 14px calc(env(safe-area-inset-bottom) + 16px);
+  max-height:82dvh; overflow-y:auto;
+  box-shadow:0 -8px 30px rgba(0,0,0,.12);
+}
+.sheet h3{margin:2px 4px 12px; font-size:16px;}
+.grid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
+.grid button{
+  height:44px; border:0; border-radius:11px; background:var(--soft); color:#3A3F47;
+  font-size:14px; font-family:inherit;
+}
+.grid button.on{background:var(--blue); color:#fff; font-weight:600;}
+.field{margin:10px 4px;}
+.field label{display:block; font-size:12px; color:var(--muted); margin-bottom:5px;}
+.field input,.field textarea,.field select{
+  width:100%; border:1px solid var(--border); border-radius:11px;
+  padding:10px 12px; font-size:15px; font-family:inherit; background:#fff; color:var(--text);
+}
+.field textarea{min-height:90px; resize:vertical;}
+.sheet .primary{
+  width:100%; height:46px; border:0; border-radius:12px; margin-top:10px;
+  background:var(--blue); color:#fff; font-size:15px; font-weight:600; font-family:inherit;
+}
+.tabs{display:flex; gap:6px; overflow-x:auto; padding:2px 2px 10px;}
+.tabs button{
+  flex:0 0 auto; border:0; border-radius:999px; padding:7px 14px;
+  background:var(--soft); color:#4A4F57; font-size:13px; font-family:inherit;
+}
+.tabs button.on{background:var(--blue); color:#fff;}
+.item{
+  background:var(--card); border:1px solid var(--border); border-radius:13px;
+  padding:12px 13px; margin-bottom:9px; font-size:14px; line-height:1.55;
+  white-space:pre-wrap; word-break:break-word;
+}
+.item .meta{font-size:11px; color:var(--muted); margin-bottom:5px;}
+.item img{max-width:100%; border-radius:9px; margin-top:7px; display:block;}
+.empty{color:var(--muted); font-size:13px; text-align:center; padding:34px 0;}
+.tip{font-size:11px; color:var(--muted); line-height:1.5; margin-top:10px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="title">答疑老师</div>
+    <div class="sub">高二 · 专属答疑</div>
+  </div>
+  <div class="actions">
+    <button id="btnBook">错题本</button>
+    <button id="btnPractice">变式</button>
+    <button id="btnNew">新对话</button>
+    <button id="btnSet">设置</button>
+  </div>
+</header>
+
+<main id="chat"></main>
+
+<div id="previewBar" class="hidden">
+  <img id="previewImg" alt="">
+  <span class="nm" id="previewName"></span>
+  <button id="btnClearImg">移除</button>
+</div>
+
+<footer>
+  <button id="btnImg">图片</button>
+  <textarea id="input" rows="1" placeholder="输入问题，或拍照发题…"></textarea>
+  <button id="btnSend">发送</button>
+</footer>
+
+<input type="file" id="fileInput" accept="image/*" hidden>
+
+<div id="overlay" class="hidden"></div>
+<div id="sheet" class="sheet hidden"></div>
+
+<script>
+"use strict";
+
+const BASE_PROMPT = `你是一位耐心、专业的高二全科答疑老师，只负责答疑、讲题和学习规划。
+
+【讲题原则】
+1. 先判断学生卡在哪一步：概念不清、方法没想到、还是计算/审题失误。
+2. 先给提示，不要直接给完整答案，让学生自己往下算；卡住了再给下一层提示。
+3. 只有学生明确说“直接给答案/给完整过程”时，才给完整解析。
+4. 不超纲：只用高二已学过的知识，不引入没学过的定理或技巧；必须用到时先说清它是什么。
+5. 讲完用一句话总结这类题的方法，并提醒学生可以记进错题本。
+
+【看题图片时】
+- 先完整读出题目（题干、条件、要求），如果图片模糊或看不清某处，直接说出来，不要猜。
+- 然后按上面的原则讲解。
+
+【风格】
+- 全程简体中文，语气像真人老师，不说空话套话。
+- 不确定的题直接说“我不确定”，不要编答案或编步骤。`;
+
+const DEFAULT_SUBJECTS = ["数学","物理","化学","生物","语文","英语","政治","历史","地理"];
+const VISION_MODEL = "deepseek-flash";
+
+const S = {
+  key: localStorage.getItem("dt_key") || "",
+  model: localStorage.getItem("dt_model") || "deepseek-chat",
+  profile: localStorage.getItem("dt_profile") || "",
+  lastSubject: localStorage.getItem("dt_subject") || "数学",
+  messages: [],
+  busy: false,
+  pending: null,   // {b64, name}
+};
+
+const $ = (id) => document.getElementById(id);
+const chat = $("chat");
+const input = $("input");
+const sheet = $("sheet");
+const overlay = $("overlay");
+
+/* ---------------- 错题本存储 ---------------- */
+function loadBook(){
+  try { return JSON.parse(localStorage.getItem("dt_book") || "{}"); }
+  catch(e){ return {}; }
+}
+function saveBook(b){
+  try { localStorage.setItem("dt_book", JSON.stringify(b)); }
+  catch(e){ alert("错题本存储已满，请删掉一些旧错题（图片很占空间）"); }
+}
+function subjects(){
+  const b = loadBook();
+  const extra = Object.keys(b).filter(s => !DEFAULT_SUBJECTS.includes(s));
+  return DEFAULT_SUBJECTS.concat(extra);
+}
+function bookCount(){
+  const b = loadBook();
+  let n = 0;
+  for (const k in b) n += (b[k] || []).length;
+  return n;
+}
+
+/* ---------------- 界面基础 ---------------- */
+function scrollBottom(){
+  chat.scrollTop = chat.scrollHeight;
+}
+function bubble(role, text, imgB64){
+  const row = document.createElement("div");
+  row.className = "msg " + (role === "user" ? "me" : "bot");
+  const av = document.createElement("div");
+  av.className = "av";
+  av.textContent = role === "user" ? "我" : "师";
+  const wrap = document.createElement("div");
+  const b = document.createElement("div");
+  b.className = "bubble";
+  if (imgB64) {
+    const im = document.createElement("img");
+    im.src = "data:image/jpeg;base64," + imgB64;
+    b.appendChild(im);
+  }
+  const t = document.createElement("span");
+  t.textContent = text || "";
+  b.appendChild(t);
+  wrap.appendChild(b);
+  row.appendChild(av);
+  row.appendChild(wrap);
+  chat.appendChild(row);
+  scrollBottom();
+  return {row, span: t, wrap};
+}
+
+function addRecordButton(wrap, pairIndex){
+  const under = document.createElement("div");
+  under.className = "under";
+  const btn = document.createElement("button");
+  btn.textContent = "记进错题本";
+  btn.addEventListener("click", () => pickSubject((subj) => {
+    saveRecord(pairIndex, subj);
+    btn.textContent = "已记入 " + subj;
+    btn.disabled = true;
+  }));
+  under.appendChild(btn);
+  wrap.appendChild(under);
+}
+
+/* ---------------- 消息发送 ---------------- */
+function systemPrompt(){
+  let p = BASE_PROMPT;
+  if (S.profile.trim()) p += "\n【学生档案】（回答时按这份档案来）\n" + S.profile.trim() + "\n";
+  return p;
+}
+
+function buildMessages(){
+  const msgs = [{role:"system", content: systemPrompt()}];
+  for (const m of S.messages) msgs.push(m);
+  return msgs;
+}
+
+async function send(){
+  if (S.busy) return;
+  if (!S.key) { openSettings(); return; }
+  const text = input.value.trim();
+  const img = S.pending;
+  if (!text && !img) return;
+
+  input.value = "";
+  autoGrow();
+
+  let content, shown, model, imgB64 = null;
+  if (img) {
+    imgB64 = img.b64;
+    content = [
+      {type:"text", text: text || "请看看这道题，帮我讲解。"},
+      {type:"image_url", image_url:{url:"data:image/jpeg;base64," + img.b64}}
+    ];
+    shown = text || "";
+    model = VISION_MODEL;
+  } else {
+    content = text;
+    shown = text;
+    model = S.model;
+  }
+
+  const pairIndex = S.messages.length;
+  S.messages.push({role:"user", content});
+  const meBubble = bubble("user", shown, imgB64);
+  clearPending();
+
+  const bot = bubble("bot", "");
+  bot.span.textContent = "…";
+  S.busy = true;
+  $("btnSend").disabled = true;
+
+  const acc = {text: ""};
+  try {
+    await streamChat(buildMessages(), model, (d) => {
+      acc.text += d;
+      bot.span.textContent = acc.text;
+      scrollBottom();
+    });
+    S.messages.push({role:"assistant", content: acc.text});
+    bot.span.textContent = acc.text || "（没有返回内容）";
+    addRecordButton(bot.wrap, pairIndex + 1); // assistant 的位置
+  } catch (e) {
+    bot.span.textContent = "出错了：" + e.message;
+  } finally {
+    S.busy = false;
+    $("btnSend").disabled = false;
+    scrollBottom();
+  }
+}
+
+async function streamChat(messages, model, onDelta){
+  const res = await fetch("https://api.deepseek.com/chat/completions", {
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "Authorization":"Bearer " + S.key
+    },
+    body: JSON.stringify({model, messages, stream:true, temperature:0.7})
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    if (res.status === 401 || res.status === 403) throw new Error("API Key 无效");
+    throw new Error("HTTP " + res.status + " " + t.slice(0, 150));
+  }
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  while (true) {
+    const {done, value} = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, {stream:true});
+    let idx;
+    while ((idx = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, idx).trim();
+      buf = buf.slice(idx + 1);
+      if (!line.startsWith("data:")) continue;
+      const data = line.slice(5).trim();
+      if (data === "[DONE]") return;
+      try {
+        const obj = JSON.parse(data);
+        const d = ((obj.choices || [{}])[0].delta || {}).content || "";
+        if (d) onDelta(d);
+      } catch(e) {}
+    }
+  }
+}
+
+/* ---------------- 图片 ---------------- */
+function compressImage(file, maxSide){
+  maxSide = maxSide || 1568;
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      let w = img.naturalWidth, h = img.naturalHeight;
+      const m = Math.max(w, h);
+      if (m > maxSide) { const s = maxSide / m; w = Math.round(w*s); h = Math.round(h*s); }
+      const c = document.createElement("canvas");
+      c.width = w; c.height = h;
+      c.getContext("2d").drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL("image/jpeg", 0.85).split(",")[1]);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("图片读取失败")); };
+    img.src = url;
+  });
+}
+
+async function onFile(e){
+  const file = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  try {
+    const b64 = await compressImage(file);
+    S.pending = {b64, name: file.name || "图片"};
+    $("previewImg").src = "data:image/jpeg;base64," + b64;
+    $("previewName").textContent = file.name || "图片";
+    $("previewBar").classList.remove("hidden");
+    scrollBottom();
+  } catch(err) {
+    alert("图片处理失败：" + err.message);
+  }
+}
+
+function clearPending(){
+  S.pending = null;
+  $("previewBar").classList.add("hidden");
+}
+
+/* ---------------- 弹层 ---------------- */
+function openSheet(html){
+  sheet.innerHTML = html;
+  sheet.classList.remove("hidden");
+  overlay.classList.remove("hidden");
+}
+function closeSheet(){
+  sheet.classList.add("hidden");
+  sheet.innerHTML = "";
+  overlay.classList.add("hidden");
+}
+overlay.addEventListener("click", closeSheet);
+
+function pickSubject(onPick){
+  const subs = subjects();
+  let html = '<h3>这道题属于哪一科？</h3><div class="grid">';
+  subs.forEach((s) => {
+    html += '<button data-s="' + encodeURIComponent(s) + '" class="' + (s === S.lastSubject ? "on" : "") + '">' + s + "</button>";
+  });
+  html += '</div><div class="tip">点一下直接选定并保存。没有你的科目？在设置里可以不管，直接选最接近的一科。</div>';
+  openSheet(html);
+  sheet.querySelectorAll(".grid button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const s = decodeURIComponent(btn.dataset.s);
+      S.lastSubject = s;
+      localStorage.setItem("dt_subject", s);
+      closeSheet();
+      onPick(s);
+    });
+  });
+}
+
+/* ---------------- 记错题 ---------------- */
+function saveRecord(pairIndex, subject){
+  const userMsg = S.messages[pairIndex - 1];
+  const botMsg = S.messages[pairIndex];
+  if (!userMsg || !botMsg) { alert("记录失败：找不到这轮问答"); return; }
+
+  let text = "", images = [];
+  if (Array.isArray(userMsg.content)) {
+    for (const b of userMsg.content) {
+      if (b.type === "text") text += (text ? " " : "") + b.text;
+      if (b.type === "image_url") {
+        const url = (b.image_url || {}).url || "";
+        if (url.startsWith("data:")) images.push(url.split(",")[1]);
+      }
+    }
+  } else {
+    text = userMsg.content || "";
+  }
+
+  const book = loadBook();
+  book[subject] = book[subject] || [];
+  book[subject].unshift({
+    id: Date.now(),
+    text: text || "（图片题）",
+    answer: botMsg.content || "",
+    images,
+    date: new Date().toLocaleString("zh-CN", {hour12:false})
+  });
+  // 每科最多保留 40 条，避免占满存储
+  book[subject] = book[subject].slice(0, 40);
+  saveBook(book);
+}
+
+/* ---------------- 错题本 ---------------- */
+function openBook(){
+  const book = loadBook();
+  const subs = subjects();
+  let html = '<h3>错题本</h3><div class="tabs" id="tabs">';
+  subs.forEach((s, i) => {
+    html += '<button data-s="' + encodeURIComponent(s) + '" class="' + (i === 0 ? "on" : "") + '">' + s + "(" + ((book[s]||[]).length) + ")</button>";
+  });
+  html += '</div><div id="items"></div>';
+  openSheet(html);
+
+  function render(subj){
+    const items = book[subj] || [];
+    const box = $("items");
+    if (!items.length) { box.innerHTML = '<div class="empty">这一科还没有错题</div>'; return; }
+    box.innerHTML = "";
+    items.forEach((it) => {
+      const d = document.createElement("div");
+      d.className = "item";
+      let h = '<div class="meta">' + it.date + '</div>';
+      h += escapeHtml(it.text);
+      if (it.images && it.images.length) h += '<img src="data:image/jpeg;base64,' + it.images[0] + '">';
+      h += '<div class="meta" style="margin-top:8px">老师解析</div>';
+      h += escapeHtml(it.answer);
+      d.innerHTML = h;
+      box.appendChild(d);
+    });
+  }
+
+  sheet.querySelectorAll("#tabs button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      sheet.querySelectorAll("#tabs button").forEach(b => b.classList.remove("on"));
+      btn.classList.add("on");
+      render(decodeURIComponent(btn.dataset.s));
+    });
+  });
+  render(subs[0]);
+}
+
+function escapeHtml(s){
+  return String(s == null ? "" : s)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+}
+
+/* ---------------- 变式练习 ---------------- */
+function openPractice(){
+  pickSubject((subj) => {
+    const book = loadBook();
+    const items = (book[subj] || []).slice(0, 8);
+    if (!items.length) { alert("「" + subj + "」还没有错题，先记几道再来"); return; }
+    let summary = items.map((it, i) =>
+      "【错题" + (i+1) + "】\n" + it.text + "\n答案/解析：" + it.answer
+    ).join("\n\n---\n\n");
+
+    const prompt = "下面是我在【" + subj + "】这一科积累的错题记录。请按三步来：\n" +
+      "1. 先归纳这些错题反映出的 2～3 个薄弱点（要具体到方法或概念，不要泛泛而谈）。\n" +
+      "2. 针对这些薄弱点出 5 道变式练习题：同类型，但换数字、换问法或改条件，不要照抄原题。\n" +
+      "3. 先只给题目；题目之后空一行，单独用「答案与思路」一节给出每题答案和关键一步。\n\n" +
+      "错题记录如下：\n\n" + summary;
+
+    const pairIndex = S.messages.length;
+    S.messages.push({role:"user", content: prompt});
+    bubble("user", "[变式练习·" + subj + "] 根据错题本出题");
+    const bot = bubble("bot", "…");
+    S.busy = true;
+    $("btnSend").disabled = true;
+    const acc = {text: ""};
+    streamChat(buildMessages(), S.model, (d) => {
+      acc.text += d;
+      bot.span.textContent = acc.text;
+      scrollBottom();
+    }).then(() => {
+      S.messages.push({role:"assistant", content: acc.text});
+      bot.span.textContent = acc.text || "（没有返回内容）";
+    }).catch((e) => {
+      bot.span.textContent = "出错了：" + e.message;
+    }).finally(() => {
+      S.busy = false;
+      $("btnSend").disabled = false;
+    });
+  });
+}
+
+/* ---------------- 设置 ---------------- */
+function openSettings(){
+  const subs = ["deepseek-chat", "deepseek-flash", "deepseek-reasoner"];
+  let html = '<h3>设置</h3>';
+  html += '<div class="field"><label>API Key（sk- 开头）</label><input id="fKey" type="password" value="' + escapeHtml(S.key) + '" placeholder="sk-..."></div>';
+  html += '<div class="field"><label>默认模型</label><select id="fModel">';
+  subs.forEach((m) => { html += '<option value="' + m + '"' + (m === S.model ? " selected" : "") + '>' + m + '</option>'; });
+  html += '</select></div>';
+  html += '<div class="field"><label>我的情况（可选，会随每次提问带上）</label><textarea id="fProfile" placeholder="比如：山东，人教版，选科物化生，物理最弱，目标期末进前 100">' + escapeHtml(S.profile) + '</textarea></div>';
+  html += '<button class="primary" id="fSave">保存</button>';
+  html += '<div class="tip">Key 只存在这台手机的浏览器里，不会上传到别处。发图片时会自动用 deepseek-flash。</div>';
+  openSheet(html);
+  $("fSave").addEventListener("click", () => {
+    S.key = $("fKey").value.trim();
+    S.model = $("fModel").value;
+    S.profile = $("fProfile").value;
+    localStorage.setItem("dt_key", S.key);
+    localStorage.setItem("dt_model", S.model);
+    localStorage.setItem("dt_profile", S.profile);
+    closeSheet();
+  });
+}
+
+/* ---------------- 交互绑定 ---------------- */
+$("btnSend").addEventListener("click", send);
+$("btnImg").addEventListener("click", () => $("fileInput").click());
+$("fileInput").addEventListener("change", onFile);
+$("btnClearImg").addEventListener("click", clearPending);
+$("btnNew").addEventListener("click", () => {
+  if (S.busy) return;
+  S.messages = [];
+  chat.innerHTML = "";
+  welcome();
+});
+$("btnBook").addEventListener("click", openBook);
+$("btnPractice").addEventListener("click", openPractice);
+$("btnSet").addEventListener("click", openSettings);
+
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+});
+function autoGrow(){
+  input.style.height = "auto";
+  input.style.height = Math.min(input.scrollHeight, 120) + "px";
+}
+input.addEventListener("input", autoGrow);
+
+/* ---------------- 启动 ---------------- */
+function welcome(){
+  bubble("bot", "你好，我是你的高二答疑老师。\n\n直接把题目拍照发给我，或者打字提问都行。");
+}
+welcome();
+if (!S.key) setTimeout(openSettings, 500);
+</script>
+</body>
+</html>
