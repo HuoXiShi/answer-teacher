@@ -11,8 +11,9 @@
 <link rel="apple-touch-icon" href="icon.png">
 <link rel="icon" href="icon.png">
 <title>答疑老师</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script src="https://cdn.bootcdn.net/ajax/libs/KaTeX/0.16.9/katex.min.js"
+        onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js'"></script>
 <style>
 :root{
   --blue:#2F6BFF; --blue-d:#2558D8; --bg:#F4F6F9; --card:#fff;
@@ -685,7 +686,7 @@ function escapeHtml(s){
 
 /* 把 Markdown + LaTeX 渲染成可读内容（公式用 KaTeX） */
 function renderRich(el, text){
-  let s = escapeHtml(text);
+  let s = text;
   const formulas = [];
   s = s.replace(/\$\$([\s\S]+?)\$\$/g, (m, f) => {
     formulas.push({tex: f, display: true});
@@ -695,6 +696,7 @@ function renderRich(el, text){
     formulas.push({tex: f, display: false});
     return "\u0001F" + (formulas.length - 1) + "\u0001";
   });
+  s = escapeHtml(s);
   s = s.replace(/```([\s\S]*?)```/g, (m, c) => "<pre class=\"code\">" + c + "</pre>");
   s = s.replace(/`([^`\n]+)`/g, "<code>$1</code>");
   s = s.replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>");
